@@ -11,7 +11,7 @@ load_dotenv(env_path)
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
-    google_api_key=os.getenv("GEMINI_API_KEY")
+    google_api_key=os.getenv("AIzaSyDppws-gZ1PFMtEJQoi2V3NJZo0ERdLp0g")
 )
 
 # 1. Hackathon Recommendation Agent
