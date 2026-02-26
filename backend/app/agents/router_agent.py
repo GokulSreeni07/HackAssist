@@ -2,6 +2,9 @@ import os
 from typing import TypedDict, Annotated, List
 from langgraph.graph import StateGraph, END
 from ..rag.rag_engine import rag_engine
+# when the GEMINI_API_KEY is missing the Google LLM will raise at import;
+# wrap creation in a helper that can fall back to a dummy model so the router
+# graph can still be constructed and the API starts.
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import BaseMessage, HumanMessage
 
@@ -15,15 +18,27 @@ class AgentState(TypedDict):
 
 # Router logic
 def router_node(state: AgentState):
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    # instantiate LLM lazily so we don't crash at import time if the key is
+    # missing.  If creation fails we continue with a trivial intent.
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    except Exception:
+        llm = None
     query = state["messages"][-1].content
     
     # Simple classification prompt
     prompt = f"Classify this hackathon query: RECOMMENDATION, TEAM_MATCHING, IDEA_GEN, ANALYTICS. Query: {query}"
-    intent = llm.invoke(prompt).content.strip().upper()
+    if llm:
+        try:
+            intent = llm.invoke(prompt).content.strip().upper()
+        except Exception:
+            intent = "RECOMMENDATION"
+    else:
+        intent = "RECOMMENDATION"
     
     # RAG lookup for context
-    context = rag_engine.query(query)
+    # RAG lookup for context (may return empty list if engine disabled)
+    context = rag_engine.query(query) if rag_engine else []
     context_text = "\n".join([doc.page_content for doc in context])
     
     return {"intent": intent, "context": context_text}

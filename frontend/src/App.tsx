@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LandingPage } from './pages/LandingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AuthPage } from './pages/AuthPage';
+import Login from './pages/Login';
 const RegistrationPage = lazy(() => import('./pages/RegistrationPage').then(m => ({ default: m.RegistrationPage })));
 import { useStore } from './store/store';
 
@@ -53,6 +54,7 @@ const App: React.FC = () => {
         <Suspense fallback={<div className="h-20 bg-black flex items-center justify-center font-mono text-[10px] text-white/20">Accessing Node...</div>}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route
               path="/app"
@@ -70,6 +72,11 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               }
             />
+            {/* Role-based dashboard routes */}
+            <Route path="/student" element={<LandingPage />} />
+            <Route path="/faculty" element={<LandingPage />} />
+            <Route path="/hod" element={<LandingPage />} />
+            <Route path="/admin" element={<LandingPage />} />
           </Routes>
         </Suspense>
 

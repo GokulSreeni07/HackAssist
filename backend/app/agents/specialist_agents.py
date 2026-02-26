@@ -9,10 +9,26 @@ from ..database import SessionLocal, Student, Hackathon, Participation
 env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
 load_dotenv(env_path)
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=os.getenv("AIzaSyDppws-gZ1PFMtEJQoi2V3NJZo0ERdLp0g")
-)
+"""Instantiate the LLM.  The original code mistakenly passed the actual API
+key string to ``os.getenv`` which meant the lookup always returned ``None``
+and the model raised a ValidationError during import.  We now attempt to read
+the key from a conventional environment variable and gracefully degrade if it
+is missing or invalid.  All callers already catch exceptions around model
+usage so failing to create an LLM here will not crash the server.
+"""
+gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if gemini_key:
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=gemini_key
+        )
+    except Exception as e:
+        print(f"⚠️  Could not initialise Gemini LLM: {e}")
+        llm = None
+else:
+    print("⚠️  GEMINI_API_KEY/GOOGLE_API_KEY not set; AI features will be stubbed.")
+    llm = None
 
 # 1. Hackathon Recommendation Agent
 recommendation_prompt = ChatPromptTemplate.from_template("""
@@ -40,6 +56,8 @@ async def get_personalized_recommendations(student_id: int):
         profile_str = f"Skills: {student.skills}, Interests: {student.interests}, Experience: {student.experience_level}"
         hacks_str = "\n".join([f"- ID: {h.hackathon_id}, Name: {h.name}: {h.description} (Skills Required: {h.skills_required})" for h in hackathons])
         
+        if llm is None:
+            raise RuntimeError("LLM unavailable")
         chain = recommendation_prompt | llm | StrOutputParser()
         res = await chain.ainvoke({"profile": profile_str, "hackathons": hacks_str})
         
@@ -95,6 +113,10 @@ async def get_recommendations_text(student_id: int, context: str):
     Provide helpful text-based recommendations.
     """)
     
+    if llm is None:
+        # AI unavailable; return simple textual fallback
+        db.close()
+        return "AI Recommendation Temporarily Offline."
     chain = prompt | llm | StrOutputParser()
     res = await chain.ainvoke({"profile": profile_str, "hackathons": hacks_str, "context": context})
     db.close()
@@ -125,6 +147,9 @@ async def get_team_suggestions(student_id: int):
     user_str = f"{user.name} (Skills: {user.skills}, Experience: {user.experience_level})"
     pool_str = "\n".join([f"- {s.name} (Skills: {s.skills}, Experience: {s.experience_level})" for s in others])
     
+    if llm is None:
+        db.close()
+        return "AI Team suggestion service unavailable."
     chain = team_formation_prompt | llm | StrOutputParser()
     res = await chain.ainvoke({"user": user_str, "pool": pool_str})
     db.close()
@@ -146,6 +171,8 @@ Output format:
 """)
 
 async def get_hackathon_ideas(theme: str, tech_stack: str):
+    if llm is None:
+        return "Unable to generate ideas right now."
     chain = idea_gen_prompt | llm | StrOutputParser()
     res = await chain.ainvoke({"theme": theme, "tech_stack": tech_stack})
     return res
@@ -171,6 +198,9 @@ async def get_department_analytics():
     
     data_summary = f"Total Students: {total_students}, Total Participations: {total_participations}"
     
+    if llm is None:
+        db.close()
+        return "Analytics service currently offline."
     chain = analytics_prompt | llm | StrOutputParser()
     res = await chain.ainvoke({"data": data_summary})
     db.close()
@@ -205,6 +235,10 @@ async def get_hackathon_roadmap_agent(student_id: int, hackathon_id: int):
     skills_str = ", ".join(student.skills) if student.skills else "Not specified"
     req_skills_str = ", ".join(hack.skills_required) if hack.skills_required else "General"
     
+    if llm is None:
+        # fall back immediately to simple roadmap
+        db.close()
+        return []
     chain = roadmap_agent_prompt | llm | StrOutputParser()
     res = await chain.ainvoke({
         "skills": skills_str,

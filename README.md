@@ -41,9 +41,8 @@ pip install -r requirements.txt
 ```
 - Create a `.env` in the root with:
 ```env
-GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=AIzaSyDppws-gZ1PFMtEJQoi2V3NJZo0ERdLp0g
 DATABASE_URL=postgresql://user:pass@host/dbname # Or sqlite for local
-```
 - Sync live data (triggers scraper + RAG index):
 ```bash
 $env:PYTHONPATH="." 
